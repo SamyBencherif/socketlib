@@ -3,7 +3,8 @@ SSL_CTX *sslctx;
 SSL *cSSL;
 int sslsetupt = false;
 fd_set rfds;
-
+// Creates a general purpose socket, this method is not disclosed to the header file.
+// Users should call the appropriate methods generating either a server_sock or client_sock struct
 int create_socket(int prot,int type)
 {
 	int protocol = (prot == AF_INET) ? AF_INET : AF_INET6;
@@ -11,20 +12,26 @@ int create_socket(int prot,int type)
 	return socket(protocol,typespec,0);
 }
 
-
-void setopt(int sock_fd, int reuse)
+/* Sets options for a file descriptor. Flag indicates the type and option for arg:
+	flag = 1 : arg is an integer, set the reuse address and reuse port option;
+	flag = 2 : arg is a struct timeval, set the timeout for the socket
+*/
+void setopt(int sock_fd, int flag, void* arg)
 {
-	int opt = 1;
-	if(reuse == true){
+	if(flag == REUSE){
+		int opt = *((int*)arg);
 		setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt));
+	}else if(flag == TIMEOUT){
+		struct timeval tv = *((struct timeval*)arg);
+		setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 	}
 }
-
+// 
 void settimeout(int sock_fd,int seconds){
-	struct timeval tv;
-	tv.tv_sec = seconds;
-	tv.tv_usec = 0;
-	setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+	struct timeval* tv = (struct timeval*)malloc(sizeof(struct timeval));
+	tv->tv_sec = seconds;
+	tv->tv_usec = 0;
+	setopt(sock_fd,2,(void*)tv);
 }
 
 #ifdef ssl_on
@@ -79,18 +86,6 @@ void init_ssl(int sock_fd,const char* path_to_chain, const char* path_to_key, in
 #endif
 
 
-struct server_sock* server_socket(int prot,int type){
-	struct server_sock *serverptr,server;
-	serverptr = &server;
-	int fd = create_socket(prot,type);
-	if(fd > 0){
-		setopt(fd,1);
-		server.fd = fd;
-	}else{
-		return NULL;
-	}
-	return serverptr;
-}
 int sock_acc(int sock_fd){
 	struct sockaddr clientaddr;
 	int addr_len = sizeof(clientaddr);
@@ -131,7 +126,7 @@ int client_connect(struct client_sock* client,int prot, const char* host, int po
 int close_socket(int sock_fd){
 	return close(sock_fd);
 }
-
+// Start io functions
 
 ssize_t send_buff(int sock_fd, const char* data, size_t length)
 {
@@ -142,6 +137,7 @@ ssize_t receive(int sock_fd, char* buff, size_t count)
 {
 	return read(sock_fd,buff,count);
 }
+// Formats the buffer sent to be 
 ssize_t send_msg(int sock_fd,const char* data,size_t length){
 	return 0;
 }
@@ -149,19 +145,51 @@ ssize_t send_msg(int sock_fd,const char* data,size_t length){
 ssize_t recv_msg(int sock_fd, char* buff, size_t count){
 	return 0;
 }
+
+// end io functions
 struct client_sock client_socket(int prot,int type, int ssl){
 	struct client_sock client;
 	client.close = close_socket;
+	client.settimeout = settimeout;
 	int fd = create_socket(prot,type);
 	if(fd > 0){
 		printf("Received file descriptor %d from sys\n",fd);
-		settimeout(fd,3);
 		client.fd = fd;
-		if(ssl > 0){
+		if(ssl == true){
 			#ifdef ssl_on
 			// add ssl code to set function read and write pointers
+			
 			#endif
+		}else{
+			client.receive = receive;
+			client.sendall = send_buff;
+			client.send_msg = send_msg;
+			client.recv_msg = recv_msg;
 		}
 	}
 	return client;
+}
+
+struct server_sock server_socket(int prot,int type,int ssl){
+	struct server_sock server;
+	int fd = create_socket(prot,type);
+	server.close = close_socket;
+	server.settimeout = settimeout;
+	if(fd > 0){
+		void* val = malloc(sizeof(int));
+		*((int*)val) = 1;
+		setopt(fd,1,val);
+		server.fd = fd;
+		if(ssl == true){
+
+		}else{
+			server.receive = receive;
+			server.sendall = send_buff;
+			server.send_msg = send_msg;
+			server.recv_msg = recv_msg;
+		}
+	}else{
+		server.fd = -1;
+	}
+	return server;
 }

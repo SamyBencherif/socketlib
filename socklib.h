@@ -16,55 +16,39 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #endif
+
 #define true 1
 #define false 0
+#define TIMEOUT 2
+#define REUSE 1
+// Abstract handle for a client socket. This is returned by client_socket where all the appropriate function
+// pointers are set. If the socket uses ssl, the io functions are set to the appropriate ssl functions.
 struct client_sock{
 	int fd,ssl;
 	ssize_t (*receive)(int sock_fd, char* buff, size_t count);
 	ssize_t (*sendall)(int sock_fd, const char* data, size_t length);
 	ssize_t (*send_msg)(int sock_fd,const char* data,size_t length);
 	ssize_t (*recv_msg)(int sock_fd, char* buff, size_t count);
+	void (*settimeout)(int sock_fd,int seconds);
 	int (*close)(int fd);
 };
+// Abstract handle for a client socket. This is returned by server_socket where all the appropriate function
+// pointers are set. If the socket uses ssl, the io functions are set to the appropriate ssl functions.
 struct server_sock{
 	int fd,ssl;
 	ssize_t (*receive)(int sock_fd, char* buff, size_t count);
 	ssize_t (*sendall)(int sock_fd, const char* data, size_t length);
 	ssize_t (*send_msg)(int sock_fd,const char* data,size_t length);
 	ssize_t (*recv_msg)(int sock_fd, char* buff, size_t count);
-	void (*accept)();
+	void (*accept)(struct server_sock server);
+	void (*settimeout)(int sock_fd,int seconds);
+	int (*close)(int fd);
 };
-int create_socket(int prot,int type);
 
-void setopt(int sock_fd, int reuse);
-
-void settimeout(int sock_fd,int seconds);
 #ifdef ssl_on
-
-void InitializeSSL();
-
-void DestroySSL();
-
-void ShutdownSSL();
-
 void init_ssl(int sock_fd,const char* path_to_chain, const char* path_to_key,int client);
 #endif
 
-struct server_sock* server_socket(int prot,int type);
+struct server_sock server_socket(int prot,int type,int ssl);
 
 struct client_sock client_socket(int prot,int type, int ssl);
-
-int client_connect(struct client_sock* ,int prot, const char* host, int port);
-
-int close_socket(int sock_fd);
-
-ssize_t send_buff(int sock_fd, const char* data, size_t length);
-
-// This implements a safe-send safe-read protocol where the size of the content is sent bore the content to ensure
-// all data is received. Note the receiving end must implment this same protocol or use the recv_msg function
-// in this library.
-ssize_t send_msg(int sock_fd,const char* data,size_t length);
-
-ssize_t recv_msg(int sock_fd, char* buff, size_t count);
-
-ssize_t receive(int sock_fd, char* buff, size_t count);

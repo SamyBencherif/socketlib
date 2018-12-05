@@ -7,6 +7,7 @@ class client_sock(Structure):
 	("sendall",CFUNCTYPE(c_ssize_t,c_char_p,c_size_t)),
 	("send_msg",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
 	("recv_msg",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
+	("settimeout",CFUNCTYPE(None,c_int,c_int)),
 	("close",CFUNCTYPE(c_int,c_int))]
 	def close_sock(self):
 		return True if self.close(self.fd) == 0 else False
