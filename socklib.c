@@ -28,13 +28,26 @@ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
 CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ Contributors: Andrew Strickland, JK2Designs
 */
 
 #include "socklib.h"
+#ifdef ssl_on
 SSL_CTX *sslctx;
 SSL *cSSL;
 int sslsetupt = false;
+#endif
+
+
+// Specify minframe
+ssize_t MIN_FRAME = 4;
+// Read descriptor vector
 fd_set rfds;
+// Number of connections
+int connections = 0;
+
+int max_fd;
+
 // Creates a general purpose socket, this method is not disclosed to the header file.
 // Users should call the appropriate methods generating either a server_sock or client_sock struct
 int create_socket(int prot,int type)
@@ -58,14 +71,14 @@ void setopt(int sock_fd, int flag, void* arg)
 		setsockopt(sock_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 	}
 }
-// 
+// sets the timeout for the specified file desc
 void settimeout(int sock_fd,int seconds){
 	struct timeval* tv = (struct timeval*)malloc(sizeof(struct timeval));
 	tv->tv_sec = seconds;
 	tv->tv_usec = 0;
 	setopt(sock_fd,2,(void*)tv);
 }
-
+// SSL Currently not supported
 #ifdef ssl_on
 // SSL start
 void InitializeSSL()
@@ -125,23 +138,42 @@ int sock_acc(int sock_fd){
 	return client;
 }
 
-void add_rfds(int sock_fd){
-	
-}
-
-void select_thread(int*sock_fds, void (*callback)(int)){
+// Blocking function. If timeout is 0, this function will block indefinitely.
+int* read_select(int*sock_fds, unsigned long length, int timeout){
 	//select and for each socket to be read, run the callback on it
+    FD_ZERO(&rfds);
+    int max_fd_local = 0;
+    for(int i = 0; i < length; i++){
+        max_fd_local = (sock_fds[i] > max_fd_local) ? sock_fds[i] : max_fd_local;
+        FD_SET(sock_fds[i],&rfds);
+    }
+    struct timeval tv;
+    tv.tv_sec = timeout;
+    tv.tv_usec = 0;
+    int ready = select(max_fd_local+1,&rfds,NULL,NULL,(timeout >=0) ? &tv : NULL);
+    int* readyToRead = NULL;
+    if(ready > 0){
+        readyToRead = malloc(sizeof(int)*ready);
+        int rread_index = 0;
+        for(int i = 0; i < length; i++){
+            if(FD_ISSET(sock_fds[i],&rfds)){
+                readyToRead[rread_index++] = sock_fds[i];
+            }
+        }
+    }
+    return readyToRead;
 }
 
 
-
-int client_connect(struct client_sock* client,int prot, const char* host, int port){
+// Connects the client to a specified host and port. The host must be a propper ip address. (Hostnames must
+// be resolved before passing it to this function)
+int client_connect(struct client_sock* client, const char* host, int port){
 	struct sockaddr_in serv_addr;
 	memset(&serv_addr, '0', sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET; 
     serv_addr.sin_port = htons(port);  
     // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(prot, host, &serv_addr.sin_addr)<=0)  
+    if(inet_pton(client->prot, host, &serv_addr.sin_addr)<=0)
     { 
         printf("\nInvalid address/ Address not supported \n"); 
         return -1; 
@@ -156,37 +188,83 @@ int client_connect(struct client_sock* client,int prot, const char* host, int po
 }
 
 int close_socket(int sock_fd){
+    FD_CLR(sock_fd,&rfds);
+    connections--;
 	return close(sock_fd);
 }
 // Start io functions
 
+// Simple wrapper to send buffer
 ssize_t send_buff(int sock_fd, const char* data, size_t length)
 {
-	return send(sock_fd,data,strlen(data),0);
+	return send(sock_fd,data,length,0);
 }
-
+// Simple recv function receives data with size x: 0<= x <= count
 ssize_t receive(int sock_fd, char* buff, size_t count)
 {
-	return read(sock_fd,buff,count);
+	return recv(sock_fd,buff,count,0);
 }
-// Formats the buffer sent to be 
+// Formats the buffer sent to be. First sends the size encoded as 4 bytes which
+// the server identifies as the MIN_FRAME. Upon success it sends the message. This
+// ensures every byte of the message is received.
 ssize_t send_msg(int sock_fd,const char* data,size_t length){
-	return 0;
+    char bytes[4];
+    bytes[0] = (length >> 24) & 0xFF;
+    bytes[1] = (length >> 16) & 0xFF;
+    bytes[2] = (length >> 8) & 0xFF;
+    bytes[3] = length & 0xFF;
+    if( send_buff(sock_fd, bytes, 4) > 0){
+        return send_buff(sock_fd, data, strlen(data));
+    }else{
+        return 0;
+    }
+	
 }
-
-ssize_t recv_msg(int sock_fd, char* buff, size_t count){
-	return 0;
+// Safe read function. Note this must be used on the server side for it to work porpperly.
+// It formats the msg by sending the size of the message before the message itself.
+const char* recv_msg(int sock_fd){
+    char frame[MIN_FRAME];
+    memset(frame,'0',MIN_FRAME);
+    char* msg = NULL;
+    //Receive the minimum frame size (4 bytes for 32 bit, 64 hasnt been implemented yet)
+    ssize_t read = receive(sock_fd, frame,MIN_FRAME);
+    if( read == MIN_FRAME){
+        unsigned int size = (frame[0] << 24) | (frame[1] << 16) | (frame[2] << 8) | frame[3];
+        msg = (char*)calloc(size, sizeof(char));
+        if(msg){
+            char buffer[1024];
+            while(strlen(msg) < size){
+                //clear the buffer before the next read
+                int BUFF_MAX = 1024;
+                memset(buffer, 0, BUFF_MAX);
+                read = receive(sock_fd, buffer, BUFF_MAX-1);
+                if(read == 0 || read == -1){
+                    break;
+                }
+                buffer[read] = '\0';
+                msg = strcat(msg, buffer);
+            }
+        }
+    }
+	return msg;
 }
 
 // end io functions
 struct client_sock client_socket(int prot,int type, int ssl){
 	struct client_sock client;
+    memset(&client, '0', sizeof(client));
 	client.close = close_socket;
 	client.settimeout = settimeout;
+    client.err = NULL;
 	int fd = create_socket(prot,type);
 	if(fd > 0){
 		printf("Received file descriptor %d from sys\n",fd);
+        connections++;
+        max_fd = (fd > max_fd) ? fd : max_fd;
 		client.fd = fd;
+        client.prot = prot;
+        client.type = type;
+        client.connect = client_connect;
 		if(ssl == true){
 			#ifdef ssl_on
 			// add ssl code to set function read and write pointers
@@ -198,7 +276,10 @@ struct client_sock client_socket(int prot,int type, int ssl){
 			client.send_msg = send_msg;
 			client.recv_msg = recv_msg;
 		}
-	}
+    }else{
+        client.fd = -1;
+        client.err = "Failed to receive a file descriptor for the client.";
+    }
 	return client;
 }
 
