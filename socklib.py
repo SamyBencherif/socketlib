@@ -44,6 +44,8 @@ class client_sock(Structure):
 		buff = create_string_buffer(size)
 		self.receive(c_int(self.fd),buff,c_size_t(size))
 		return buff
+	def Connect(self,host,port):
+		return self.connect(self,c_char_p(host),c_int(port)) == true
 	def Sendall(self,data):
 		length = c_size_t(len(data))
 		return self.sendall(c_int(self.fd),c_char_p(data),length)
