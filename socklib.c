@@ -278,7 +278,7 @@ const char* recv_msg(int sock_fd){
 struct client_sock sock_acc(struct server_sock server){
 	struct client_sock client;
 	struct sockaddr clientaddr;
-	int addr_len = sizeof(clientaddr);
+	socklen_t addr_len = sizeof(clientaddr);
 	int fd = accept(server.fd,&clientaddr,&addr_len);
 	if(fd >= 0){
 		if(server.ssl == false){

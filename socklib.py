@@ -31,8 +31,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Contributors: Andrew Strickland
 """
 from ctypes import *
-cdll.LoadLibrary('./libsock.so')
-libc = CDLL('./libsock.so')
+from platform import system as osname
+systype = osname()
+libc = None
+if systype == 'Darwin':
+	cdll.LoadLibrary('./libsock.dylib')
+	libc = CDLL('./libsock.dylib')
+elif systype == 'Linux':
+	cdll.LoadLibrary('./libsock.so')
+	libc = CDLL('./libsock.so')
 true = 1
 false = 0
 class client_sock(Structure):
