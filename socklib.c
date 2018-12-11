@@ -130,15 +130,24 @@ void init_ssl(int sock_fd,const char* path_to_chain, const char* path_to_key, in
 // End ssl
 #endif
 
+// server functions
 
-int sock_acc(int sock_fd){
-	struct sockaddr clientaddr;
-	int addr_len = sizeof(clientaddr);
-	int client = accept(sock_fd,&clientaddr,&addr_len);
-	return client;
+int start(struct server_sock server, int backlog, int port){
+	struct sockaddr_in serverAddr;
+	memset(&serverAddr,0,sizeof(serverAddr));
+	serverAddr.sin_family = server.prot;
+	serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	serverAddr.sin_port = htons(port);
+	if(bind(server.fd,(struct sockaddr*) &serverAddr, sizeof(serverAddr)) < 0){
+		return false;
+	}
+	if(listen(server.fd,backlog) < 0){
+		return false;
+	}
+	return true;
 }
-
-// Blocking function. If timeout is 0, this function will block indefinitely.
+//end server functions
+// Blocking function. If timeout is -1, this function will block indefinitely.
 int* read_select(int*sock_fds, unsigned long length, int timeout){
 	//select and for each socket to be read, run the callback on it
     FD_ZERO(&rfds);
@@ -167,19 +176,19 @@ int* read_select(int*sock_fds, unsigned long length, int timeout){
 
 // Connects the client to a specified host and port. The host must be a propper ip address. (Hostnames must
 // be resolved before passing it to this function)
-int client_connect(struct client_sock* client, const char* host, int port){
+int client_connect(struct client_sock client, const char* host, int port){
 	struct sockaddr_in serv_addr;
 	memset(&serv_addr, '0', sizeof(serv_addr));
 	serv_addr.sin_family = AF_INET; 
     serv_addr.sin_port = htons(port);  
     // Convert IPv4 and IPv6 addresses from text to binary form 
-    if(inet_pton(client->prot, host, &serv_addr.sin_addr)<=0)
+    if(inet_pton(client.prot, host, &serv_addr.sin_addr)<=0)
     { 
         printf("\nInvalid address/ Address not supported \n"); 
         return -1; 
     } 
    
-    if (connect(client->fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
+    if (connect(client.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) 
     { 
         printf("\nConnection Failed \n"); 
         return -1; 
@@ -204,16 +213,27 @@ ssize_t receive(int sock_fd, char* buff, size_t count)
 {
 	return recv(sock_fd,buff,count,0);
 }
-// Formats the buffer sent to be. First sends the size encoded as 4 bytes which
-// the server identifies as the MIN_FRAME. Upon success it sends the message. This
-// ensures every byte of the message is received.
-ssize_t send_msg(int sock_fd,const char* data,size_t length){
-    char bytes[4];
+// Encode the size of the message to a char* that can be sent to the remote connection
+char* encodeInteger(size_t length){
+	char* bytes = (char*)malloc(sizeof(char)*MIN_FRAME);
     bytes[0] = (length >> 24) & 0xFF;
     bytes[1] = (length >> 16) & 0xFF;
     bytes[2] = (length >> 8) & 0xFF;
     bytes[3] = length & 0xFF;
+	return bytes;
+}
+// Decodes the frame received into an integer size
+unsigned int decodeInteger(char* frame){
+	unsigned int size = (frame[0] << 24) | (frame[1] << 16) | (frame[2] << 8) | frame[3];
+	return size;
+}
+// Formats the buffer sent to be. First sends the size encoded as 4 bytes which
+// the server identifies as the MIN_FRAME. Upon success it sends the message. This
+// ensures every byte of the message is received.
+ssize_t send_msg(int sock_fd,const char* data,size_t length){
+	char* bytes = encodeInteger(length);
     if( send_buff(sock_fd, bytes, 4) > 0){
+		free(bytes);
         return send_buff(sock_fd, data, strlen(data));
     }else{
         return 0;
@@ -222,6 +242,7 @@ ssize_t send_msg(int sock_fd,const char* data,size_t length){
 }
 // Safe read function. Note this must be used on the server side for it to work porpperly.
 // It formats the msg by sending the size of the message before the message itself.
+// THE RECEIVER IS RESPONSIBLE FOR FREEING THE RETURN VALUE
 const char* recv_msg(int sock_fd){
     char frame[MIN_FRAME];
     memset(frame,'0',MIN_FRAME);
@@ -229,7 +250,8 @@ const char* recv_msg(int sock_fd){
     //Receive the minimum frame size (4 bytes for 32 bit, 64 hasnt been implemented yet)
     ssize_t read = receive(sock_fd, frame,MIN_FRAME);
     if( read == MIN_FRAME){
-        unsigned int size = (frame[0] << 24) | (frame[1] << 16) | (frame[2] << 8) | frame[3];
+        unsigned int size = decodeInteger(frame);
+		// alocate space for the incoming message
         msg = (char*)calloc(size, sizeof(char));
         if(msg){
             char buffer[1024];
@@ -238,9 +260,11 @@ const char* recv_msg(int sock_fd){
                 int BUFF_MAX = 1024;
                 memset(buffer, 0, BUFF_MAX);
                 read = receive(sock_fd, buffer, BUFF_MAX-1);
+				// nothing read or an error occurred no need to get stuck in a loop
                 if(read == 0 || read == -1){
                     break;
                 }
+				// append the conents to our msg 
                 buffer[read] = '\0';
                 msg = strcat(msg, buffer);
             }
@@ -250,12 +274,44 @@ const char* recv_msg(int sock_fd){
 }
 
 // end io functions
+
+struct client_sock sock_acc(struct server_sock server){
+	struct client_sock client;
+	struct sockaddr clientaddr;
+	int addr_len = sizeof(clientaddr);
+	int fd = accept(server.fd,&clientaddr,&addr_len);
+	if(fd >= 0){
+		if(server.ssl == false){
+			client.fd = fd;
+			client.prot = server.prot;
+			client.type = server.prot;
+			client.receive = receive;
+			client.sendall = send_buff;
+			client.send_msg = send_msg;
+			client.recv_msg = recv_msg;
+			client.connect = NULL;
+			client.close = close_socket;
+			client.settimeout = settimeout;
+			client.err = NULL;
+		}else{
+			#ifdef ssl_on
+			//add ssl code
+			#endif
+		}
+	}else{
+		client.fd = -1;
+		client.err = "Could not obtain file descriptor from the system.";
+	}
+	return client;
+	
+}
 struct client_sock client_socket(int prot,int type, int ssl){
 	struct client_sock client;
     memset(&client, '0', sizeof(client));
 	client.close = close_socket;
 	client.settimeout = settimeout;
     client.err = NULL;
+	client.ssl = ssl;
 	int fd = create_socket(prot,type);
 	if(fd > 0){
 		printf("Received file descriptor %d from sys\n",fd);
@@ -271,6 +327,7 @@ struct client_sock client_socket(int prot,int type, int ssl){
 			
 			#endif
 		}else{
+			client.ssl = false;
 			client.receive = receive;
 			client.sendall = send_buff;
 			client.send_msg = send_msg;
@@ -288,6 +345,9 @@ struct server_sock server_socket(int prot,int type,int ssl){
 	int fd = create_socket(prot,type);
 	server.close = close_socket;
 	server.settimeout = settimeout;
+	server.prot = prot;
+    server.type = type;
+	server.ssl = ssl;
 	if(fd > 0){
 		void* val = malloc(sizeof(int));
 		*((int*)val) = 1;
@@ -300,6 +360,8 @@ struct server_sock server_socket(int prot,int type,int ssl){
 			server.sendall = send_buff;
 			server.send_msg = send_msg;
 			server.recv_msg = recv_msg;
+			server.start = start;
+			server.accept = sock_acc;
 		}
 	}else{
 		server.fd = -1;

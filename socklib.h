@@ -65,20 +65,22 @@ struct client_sock{
 	ssize_t (*sendall)(int sock_fd, const char* data, size_t length);
 	ssize_t (*send_msg)(int sock_fd,const char* data,size_t length);
 	const char* (*recv_msg)(int sock_fd);
-    int (*connect)(struct client_sock* cli, const char* hostname, int port);
+    int (*connect)(struct client_sock cli, const char* hostname, int port);
 	void (*settimeout)(int sock_fd,int seconds);
 	int (*close)(int fd);
 };
 // Abstract handle for a client socket. This is returned by server_socket where all the appropriate function
 // pointers are set. If the socket uses ssl, the io functions are set to the appropriate ssl functions.
 struct server_sock{
-	int fd,ssl;
+	int fd,ssl,prot,type;
+	const char* err;
 	ssize_t (*receive)(int sock_fd, char* buff, size_t count);
 	ssize_t (*sendall)(int sock_fd, const char* data, size_t length);
 	ssize_t (*send_msg)(int sock_fd,const char* data,size_t length);
-	ssize_t (*recv_msg)(int sock_fd, char* buff, size_t count);
-	void (*accept)(struct server_sock server);
+	const char* (*recv_msg)(int sock_fd);
+	struct client_sock (*accept)(struct server_sock server);
 	void (*settimeout)(int sock_fd,int seconds);
+	int (*start)(struct server_sock server, int backlog, int port);
 	int (*close)(int fd);
 };
 
