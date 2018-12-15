@@ -32,7 +32,7 @@
  */
 
 #include "socklib.h"
-
+#include "sslfunctions.h"
 
 // Specify minframe
 ssize_t MIN_FRAME = 4;
@@ -94,6 +94,13 @@ int start(struct server_sock* server, int backlog, int port){
     }
     return true;
 }
+bool sock_state_valid(COMM* handle){
+    errno = 0;
+    if(handle->fd == -1){
+        return false;
+    }
+    return true;
+}
 //end server functions
 // Blocking function. If timeout is -1, this function will block indefinitely.
 int* read_select(int*sock_fds, unsigned long length, int timeout){
@@ -128,6 +135,9 @@ int* read_select(int*sock_fds, unsigned long length, int timeout){
 // Connects the client to a specified host and port. The host must be a propper ip address. (Hostnames must
 // be resolved before passing it to this function)
 int client_connect(struct client_sock* client, const char* host, int port){
+    if(!sock_state_valid(&client->handle)){
+        return INVALIDSTATE;
+    }
     struct sockaddr_in serv_addr;
     memset(&serv_addr, '0', sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -160,32 +170,29 @@ int close_socket(COMM* handle){
     if(errno == EBADF){
         return -1;
     }
-    handle->fd = -1;
+    errno = 0;
     printf("Attempting to shutdown %d\n",sock_fd);
     if(shutdown(sock_fd,SHUT_RDWR) == 0){
-        printf("Shutdown successful! Attempting to close!\n");
-        return close(sock_fd);
+        if(errno == 0){
+            printf("Shutdown successful! Attempting to close!\n");
+            return close(sock_fd);
+        }else{
+            return -1;
+        }
     }else{
         printf("Error %d\n",errno);
     }
     return -1;
 }
 // Start io functions
-bool sock_state_valid(COMM* handle){
-    errno = 0;
-    if(handle->fd == -1){
-        return false;
-    }
-    return true;
-}
+
 
 // Simple wrapper to send buffer
 ssize_t send_buff(COMM* handle, const char* data, size_t length)
 {
+    
     if(!sock_state_valid(handle)){
         return -1;
-    }else{
-        printf("Socket handle is good!\n");
     }
     int n = 1;
     setsockopt(handle->fd, SOL_SOCKET, SO_NOSIGPIPE, &n, sizeof(n));
@@ -195,16 +202,18 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
     struct timeval tv;
     tv.tv_sec = 0;
     tv.tv_usec = 0;
+    errno = 0;
+    ssize_t sent = 0;
     int ready = select(handle->fd +1,NULL,&wfds,NULL,&tv);
-    printf("Ready to write: %d\n",ready);
-    if(!FD_ISSET(handle->fd,&wfds)){
+    if(ready < 1 || !FD_ISSET(handle->fd,&wfds)){
         printf("Fd not able to be written to!\n");
-        close_socket(handle);
         return -1;
     }
-    ssize_t sent = send(handle->fd,data,length,0);
-    if(errno != 0){
-        printf("Error in send_buff %d",errno);
+    if(errno == 0){
+        sent = send(handle->fd,data,length,0);
+    }
+    else{
+        printf("Error in send_buff %d\n",errno);
     }
     return sent;
 }
@@ -216,8 +225,7 @@ ssize_t receive(COMM* handle, char* buff, size_t count)
     }
     ssize_t reecved = recv(handle->fd,buff,count,0);
     if(errno != 0){
-        close_socket(handle);
-        printf("Error in recv %d",errno);
+        printf("Error in recv %d\n",errno);
     }
     return reecved;
 }
@@ -241,17 +249,18 @@ unsigned int decodeInteger(char* frame){
 ssize_t send_msg(COMM* handle,const char* data,size_t length){
     if(!sock_state_valid(handle)){
         return -1;
-    }else{
-        printf("State is good!\n");
     }
     char* bytes = encodeInteger(length);
-    if( send_buff(handle, bytes, 4) > 0){
-        free(bytes);
-        return send_buff(handle, data, strlen(data));
-    }else{
-        return 0;
+    if(bytes){
+        if( send_buff(handle, bytes, 4) > 0){
+            free(bytes);
+            return send_buff(handle, data, strlen(data));
+        }else{
+            free(bytes);
+            return 0;
+        }
     }
-    
+    return 0;
 }
 // Safe read function. Note this must be used on the server side for it to work porpperly.
 // It formats the msg by sending the size of the message before the message itself.
@@ -277,7 +286,7 @@ const char* recv_msg(COMM* handle){
                 memset(buffer, 0, BUFF_MAX);
                 read = receive(handle, buffer, BUFF_MAX-1);
                 // nothing read or an error occurred no need to get stuck in a loop
-                if(read == 0 || read == -1 || errno != 0){
+                if(read == 0 || read == -1){
                     break;
                 }
                 // append the conents to our msg

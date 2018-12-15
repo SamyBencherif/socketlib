@@ -36,21 +36,22 @@
 #include <sys/time.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <stdio.h>
+
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <errno.h>
-#define ssl_on 1
-
+#include <stdio.h>
+#include "JKNetworkingErrors.h"
 #define true 1
 #define false 0
 #define TIMEOUT 2
 #define REUSE 1
 
 //Forward declarations of SSL and the generic socket type.
+
 typedef struct ssl_st SSL;
 typedef struct ssl_ctx_st SSL_CTX;
 // An abstract socket that contains either a client_sock* or a server_sock*
@@ -89,11 +90,7 @@ struct server_sock{
     int (*start)(struct server_sock* server, int backlog, int port);
     int (*close)(COMM* handle);
 };
-
-#ifdef ssl_on
-void init_ssl(const char* path_to_chain);
-#endif
-
+extern void testSSL(COMM* handler);
 int* read_select(int*sock_fds, unsigned long length, int timeout);
 
 struct server_sock server_socket(int prot,int type,bool ssl);
