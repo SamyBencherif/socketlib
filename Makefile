@@ -4,8 +4,8 @@ linux:
 	@echo Made libsock.so
 mac:
 	@rm -rf *.dylib
-	@gcc -std=c11 -fPIC -c ./src/libsock.c -o ./objectfiles/libsock.o
-	@gcc -dynamiclib -fPIC -Wl -o ./dynamiclibs/libsock.dylib ./objectfiles/libsock.o
+	@gcc -std=c11 -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o
+	@gcc -dynamiclib -fPIC -Wl -o ./dynamiclibs/socklib.dylib ./objectfiles/socklib.o
 	@rm -rf *.o
 	@echo Made socklib.dylib	
 clean:
