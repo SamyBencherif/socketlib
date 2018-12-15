@@ -4,6 +4,7 @@ linux:
 	@rm -rf *.o
 	@echo Made libsock.so
 mac:
+	@rm -rf *.dylib
 	@gcc -std=c11 -fPIC -c socklib.c -o socklib.o
 	@gcc -dynamiclib -fPIC -Wl -o socklib.dylib socklib.o
 	@rm -rf *.o

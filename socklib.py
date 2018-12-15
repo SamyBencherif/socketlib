@@ -42,75 +42,82 @@ elif systype == 'Linux':
 	libc = CDLL('./libsock.so')
 true = 1
 false = 0
+class ssl_st(Structure):
+	pass
+class commlayer(Structure):
+	pass
+commlayer._fields_ = [("fd",c_int),("ssl",POINTER(ssl_st))]
 class client_sock(Structure):
 	def Close(self):
-		return self.close(self.fd) == 0
+		return self.close(self.handle) == 0
 	def isSSL(self):
 		return self.ssl == true
 	def Receive(self,size):
 		buff = create_string_buffer(size)
-		self.receive(c_int(self.fd),buff,c_size_t(size))
+		self.receive(POINTER(self.handle),buff,c_size_t(size))
 		return buff
 	def Connect(self,host,port):
-		return self.connect(self,c_char_p(host),c_int(port)) == true
+		return self.connect(POINTER(self),c_char_p(host),c_int(port)) == true
 	def Sendall(self,data):
 		length = c_size_t(len(data))
-		return self.sendall(c_int(self.fd),c_char_p(data),length)
+		return self.sendall(POINTER(self.handle),c_char_p(data),length)
 	def Recv_Msg(self):
-		return self.recv_msg(c_int(self.fd))
+		return self.recv_msg(POINTER(self.handle))
 	def Send_Msg(self,data):
 		length = c_size_t(len(data))
-		self.send_msg(c_int(self.fd),c_char_p(data),length)
+		self.send_msg(POINTER(self.handle),c_char_p(data),length)
 	
-client_sock._fields_ = [("fd",c_int),("ssl",c_int),("prot",c_int),("type",c_int),
+client_sock._fields_ = [("ssl",c_bool),("prot",c_int),("type",c_int),
+	("handle",POINTER(commlayer)),
 	("err",c_char_p),
-	("receive",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("sendall",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("send_msg",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("recv_msg",CFUNCTYPE(c_char_p,c_int)),
+	("receive",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("sendall",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("send_msg",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("recv_msg",CFUNCTYPE(c_char_p,POINTER(commlayer))),
 	("connect",CFUNCTYPE(c_int,client_sock,c_char_p,c_int)),
 	("settimeout",CFUNCTYPE(None,c_int,c_int)),
-	("close",CFUNCTYPE(c_int,c_int))]
+	("close",CFUNCTYPE(c_int,POINTER(commlayer)))]
 	
 class server_sock(Structure):
 	def Close(self):
-		return self.close(self.fd) == 0
+		return self.close(self.handle) == 0
 	def isSSL(self):
 		return self.ssl == true
 	def Receive(self,size):
 		buff = create_string_buffer(size)
-		self.receive(c_int(self.fd),buff,c_size_t(size))
+		self.receive(POINTER(self.handle),buff,c_size_t(size))
 		return buff
 	def Sendall(self,data):
 		length = c_size_t(len(data))
-		return self.sendall(c_int(self.fd),c_char_p(data),length)
+		return self.sendall(POINTER(self.handle),c_char_p(data),length)
 	def Start(self,backlog,port):
-		return self.start(self,c_int(backlog),c_int(port)) == true
+		return self.start(POINTER(self),c_int(backlog),c_int(port)) == true
 	def Accept(self):
 		return self.accept(self)
 	def Recv_Msg(self):
-		return self.recv_msg(c_int(self.fd))
+		return self.recv_msg(POINTER(self.handle))
 	def Send_Msg(self,data):
 		length = c_size_t(len(data))
-		self.send_msg(c_int(self.fd),c_char_p(data),length)
-server_sock._fields_ = [("fd",c_int),("ssl",c_int),("prot",c_int),("type",c_int),
+		self.send_msg(POINTER(self.handle),c_char_p(data),length)
+server_sock._fields_ = [("ssl",c_bool),("prot",c_int),("type",c_int),
+	("handle",commlayer),
 	("err",c_char_p),
-	("receive",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("sendall",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("send_msg",CFUNCTYPE(c_ssize_t,c_int,c_char_p,c_size_t)),
-	("recv_msg",CFUNCTYPE(c_char_p,c_int)),
+	("receive",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("sendall",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("send_msg",CFUNCTYPE(c_ssize_t,POINTER(commlayer),c_char_p,c_size_t)),
+	("recv_msg",CFUNCTYPE(c_char_p,POINTER(commlayer))),
 	("accept",CFUNCTYPE(client_sock,server_sock)),
 	("settimeout",CFUNCTYPE(None,c_int,c_int)),
 	("start",CFUNCTYPE(c_int,server_sock,c_int,c_int)),
-	("close",CFUNCTYPE(c_int,c_int))]
+	("close",CFUNCTYPE(c_int,POINTER(commlayer)))]
 	
 libc.client_socket.restype = client_sock
 libc.server_socket.restype = server_sock
 	# Setupt library functions
 def client_socket(prot,typ,ssl):
-    return libc.client_socket(c_int(prot),c_int(typ),c_int(ssl))
+    return libc.client_socket(c_int(prot),c_int(typ),c_bool(ssl))
 def server_socket(prot,type,ssl):
-	return libc.server_socket(c_int(prot),c_int(type),c_int(ssl))
+	return libc.server_socket(c_int(prot),c_int(type),c_bool(ssl))
 AF_INET = 2
 SOCK_STREAM = 1
 from socket import gethostbyname
