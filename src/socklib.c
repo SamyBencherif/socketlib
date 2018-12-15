@@ -195,7 +195,10 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
         return -1;
     }
     int n = 1;
+	#if __linux__
+	#else
     setsockopt(handle->fd, SOL_SOCKET, SO_NOSIGPIPE, &n, sizeof(n));
+	#endif
     fd_set wfds;
     FD_ZERO(&wfds);
     FD_SET(handle->fd,&wfds);

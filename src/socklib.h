@@ -44,7 +44,7 @@
 #include <netdb.h>
 #include <errno.h>
 #include <stdio.h>
-#include "JKNetworkingErrors.h"
+#include "NetworkingErrors.h"
 #define true 1
 #define false 0
 #define TIMEOUT 2
