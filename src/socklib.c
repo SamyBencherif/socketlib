@@ -148,13 +148,14 @@ int client_connect(struct client_sock* client, const char* host, int port){
         printf("\nInvalid address/ Address not supported \n");
         return -1;
     }
-    
-    if(client->ssl){
-        
-    }
-    else if (connect(client->handle.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0)
-    {
-        printf("\nConnection Failed \n");
+    bool connected = connect(client->handle.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0;
+    if(connected){
+        if(client->ssl){
+            initOpenSSL();
+            wrapClient(&client->handle);
+        }
+    }else{
+        printf("Failed to connect.\n");
         return -1;
     }
     return 1;
@@ -195,10 +196,7 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
         return -1;
     }
     int n = 1;
-	#if __linux__
-	#else
     setsockopt(handle->fd, SOL_SOCKET, SO_NOSIGPIPE, &n, sizeof(n));
-	#endif
     fd_set wfds;
     FD_ZERO(&wfds);
     FD_SET(handle->fd,&wfds);
@@ -213,7 +211,11 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
         return -1;
     }
     if(errno == 0){
-        sent = send(handle->fd,data,length,0);
+        if(handle->ssl){
+            sent = SSL_write(handle->ssl, data, (int)length);
+        }else{
+            sent = send(handle->fd,data,length,0);
+        }
     }
     else{
         printf("Error in send_buff %d\n",errno);
@@ -223,10 +225,15 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
 // Simple recv function receives data with size x: 0<= x <= count
 ssize_t receive(COMM* handle, char* buff, size_t count)
 {
+    ssize_t reecved = 0;
     if(!sock_state_valid(handle)){
         return -1;
     }
-    ssize_t reecved = recv(handle->fd,buff,count,0);
+    if(handle->ssl){
+        reecved = SSL_read(handle->ssl, buff, (int)count);
+    }else{
+       reecved = recv(handle->fd,buff,count,0);
+    }
     if(errno != 0){
         printf("Error in recv %d\n",errno);
     }

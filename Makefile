@@ -4,8 +4,8 @@ linux:
 	@echo Made libsock.so
 mac:
 	@rm -rf *.dylib
-	@gcc -std=c11 -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o
-	@gcc -dynamiclib -fPIC -Wl -o ./dynamiclibs/socklib.dylib ./objectfiles/socklib.o
+	@gcc -std=c11 -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o  -I /usr/local/opt/openssl/include 
+	@gcc -dynamiclib -fPIC -Wl -o ./dynamiclibs/socklib.dylib ./objectfiles/socklib.o -I /usr/local/opt/openssl/include 
 	@rm -rf *.o
 	@echo Made socklib.dylib	
 clean:
