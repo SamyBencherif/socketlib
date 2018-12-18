@@ -117,23 +117,4 @@ void wrapClient(COMM* handle){
         }
     }
 }
-
-//bool loadCertificates(const char* chainFile, const char* keyFile, SSL_CTX* ctx){
-//    if(SSL_CTX_use_certificate_file(ctx, chainFile, SSL_FILETYPE_PEM) <= 0){
-//        printf("An error occurred!\n");
-//        return false;
-//    }
-//    if(keyFile){
-//        printf("Using server configuration!\n");
-//        if(SSL_CTX_use_PrivateKey_file(ctx, keyFile, SSL_FILETYPE_PEM) <= 0){
-//            return false;
-//        }
-//        if(!SSL_CTX_check_private_key(ctx)){
-//            return false;
-//        }
-//    }
-//
-//    return true;
-//}
-
 #endif
