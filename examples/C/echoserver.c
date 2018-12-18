@@ -3,7 +3,9 @@
 int main(){
     signal(SIGPIPE, SIG_IGN);
     printf("Getting server socket\n");
-    struct server_sock server = server_socket(2,1,false);
+    struct server_sock server = server_socket(2,1,true);
+    initOpenSSL();
+    bool loaded = LoadCertificates("certificate.pem", "key.pem");
     printf("Starting server socket\n");
     const char* msg = NULL;
     if(server.start(&server,5,1337) == 1){
@@ -18,13 +20,15 @@ int main(){
             if(msg){
                 ssize_t sent = client.send_msg(&client.handle,msg,strlen(msg));
                 if(sent <= 0){
+                    printf("breaking free\n");
                     break;
                 }
             }
             usleep(1000000);
         }
     }else{
-        printf("Failed to start");
+        printf("Failed to start\n");
     }
+    printf("Closing!\n");
     return 0;
 }

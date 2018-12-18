@@ -37,11 +37,9 @@
 // Specify minframe
 ssize_t MIN_FRAME = 4;
 // Read descriptor vector
-fd_set rfds;
-// Number of connections
-int connections = 0;
 
-int max_fd;
+
+
 
 
 // Creates a general purpose socket, this method is not disclosed to the header file.
@@ -104,6 +102,7 @@ bool sock_state_valid(COMM* handle){
 //end server functions
 // Blocking function. If timeout is -1, this function will block indefinitely.
 int* read_select(int*sock_fds, unsigned long length, int timeout){
+    fd_set rfds;
     //select and for each socket to be read, run the callback on it
     FD_ZERO(&rfds);
     int max_fd_local = 0;
@@ -162,28 +161,27 @@ int client_connect(struct client_sock* client, const char* host, int port){
 }
 
 int close_socket(COMM* handle){
-    int sock_fd;
-    if(handle->ssl){
+    if(handle->fd == -1){
         return -1;
-    }else{
-        sock_fd = handle->fd;
     }
-    if(errno == EBADF){
-        return -1;
+    int shut = 0;
+    if(handle->ssl){
+        shut &= SSL_shutdown(handle->ssl);
+        SSL_free(handle->ssl);
+        handle->ssl = NULL;
     }
     errno = 0;
-    printf("Attempting to shutdown %d\n",sock_fd);
-    if(shutdown(sock_fd,SHUT_RDWR) == 0){
+    printf("Attempting to shutdown %d\n",handle->fd);
+    if(shutdown(handle->fd,SHUT_RDWR) == 0){
         if(errno == 0){
             printf("Shutdown successful! Attempting to close!\n");
-            return close(sock_fd);
-        }else{
-            return -1;
+            shut = shut<<1;
+            shut &= close(handle->fd);
         }
     }else{
         printf("Error %d\n",errno);
     }
-    return -1;
+    return (shut == 2) ? 0 : -1;
 }
 // Start io functions
 
@@ -323,27 +321,27 @@ struct client_sock sock_acc(struct server_sock server)
     socklen_t addr_len = sizeof(clientaddr);
     int fd = accept(server.handle.fd,&clientaddr,&addr_len);
     if(fd >= 0){
-        if(server.ssl == false){
+        client.handle.fd = fd;
+        client.handle.ssl = NULL;
+        // set prototype and socket type
+        client.prot = server.prot;
+        client.type = server.prot;
+        // Set io functions
+        client.receive = receive;
+        client.sendall = send_buff;
+        client.send_msg = send_msg;
+        client.recv_msg = recv_msg;
+        // disable connecting
+        client.connect = NULL;
+        client.close = close_socket;
+        client.settimeout = settimeout;
+        client.err = NULL;
+        if(server.ssl == true){
             // set communication handle
-            client.handle.fd = fd;
-            client.handle.ssl = NULL;
-            // set prototype and socket type
-            client.prot = server.prot;
-            client.type = server.prot;
-            // Set io functions
-            client.receive = receive;
-            client.sendall = send_buff;
-            client.send_msg = send_msg;
-            client.recv_msg = recv_msg;
-            // disable connecting
-            client.connect = NULL;
-            client.close = close_socket;
-            client.settimeout = settimeout;
-            client.err = NULL;
-        }else{
-#ifdef ssl_on
-            //add ssl code
-#endif
+            #ifdef ssl_on
+            wrapServer(&client.handle);
+            client.ssl = true;
+            #endif   
         }
     }else{
         client.err = "Could not obtain file descriptor from the system.";
@@ -355,7 +353,7 @@ struct client_sock client_socket(int prot,int type, bool ssl)
 {
     struct client_sock client;
     memset(&client, '0', sizeof(client));
-    COMM handle;
+    COMM handle = {0,0};
     client.handle = handle;
     // set close and timeout functions
     client.close = close_socket;
@@ -363,27 +361,19 @@ struct client_sock client_socket(int prot,int type, bool ssl)
     client.err = NULL;
     // set ssl bool
     client.ssl = ssl;
-    if(ssl == true){
-        
-    }else{
-        int fd = create_socket(prot,type);
-        if(fd > 0){
-            printf("Received file descriptor %d from sys\n",fd);
-            connections++;
-            max_fd = (fd > max_fd) ? fd : max_fd;
-            client.handle.fd = fd;
-            client.handle.ssl = NULL;
-            client.prot = prot;
-            client.type = type;
-            client.connect = client_connect;
-            client.receive = receive;
-            client.sendall = send_buff;
-            client.recv_msg = recv_msg;
-            client.send_msg = send_msg;
-        }
+    int fd = create_socket(prot,type);
+    if(fd > 0){
+        printf("Received file descriptor %d from sys.\n",fd);
+        client.handle.fd = fd;
+        client.handle.ssl = NULL;
+        client.prot = prot;
+        client.type = type;
+        client.connect = client_connect;
+        client.receive = receive;
+        client.sendall = send_buff;
+        client.recv_msg = recv_msg;
+        client.send_msg = send_msg;
     }
-    
-
     return client;
 }
 void release_client(struct client_sock client){
@@ -407,17 +397,13 @@ struct server_sock server_socket(int prot,int type,bool ssl)
         *((int*)val) = 1;
         setopt(fd,1,val);
         server.handle.fd = fd;
-        if(ssl == true){
-            
-        }else{
-            server.handle.ssl = NULL;
-            server.receive = receive;
-            server.sendall = send_buff;
-            server.send_msg = send_msg;
-            server.recv_msg = recv_msg;
-            server.start = start;
-            server.accept = sock_acc;
-        }
+        server.handle.ssl = NULL;
+        server.receive = receive;
+        server.sendall = send_buff;
+        server.send_msg = send_msg;
+        server.recv_msg = recv_msg;
+        server.start = start;
+        server.accept = sock_acc;
     }else{
         server.handle.fd = -1;
     }

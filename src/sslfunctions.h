@@ -30,12 +30,16 @@ void initOpenSSL()
         SSL_load_error_strings();
         cCtx = SSL_CTX_new(SSLv23_client_method());
         sCtx = SSL_CTX_new(SSLv23_server_method());
+        sslInitialized = true;
     }
 }
 bool LoadCertificates(char* CertFile, char* KeyFile)
 {
+    if(!sCtx){
+        return false;
+    }
     if(SSL_CTX_use_certificate_file(sCtx,CertFile,SSL_FILETYPE_PEM) <= 0){
-        return false;   
+        return false;
     }
     if(SSL_CTX_use_PrivateKey_file(sCtx,KeyFile,SSL_FILETYPE_PEM) <= 0){
         return false;
@@ -86,22 +90,16 @@ void wrapServer(COMM* handle)
         handle->ssl = SSL_new(sCtx);
         SSL_set_fd(handle->ssl,handle->fd);
         if(SSL_accept(handle->ssl) == FAIL){
-        
+            printf("An ssl accept error occurred!\n");
         }else{
             ShowCerts(handle->ssl);
         }
     }
 }
-void freeConnection(COMM* handle){
-    if(handle->ssl){
-        SSL_free(handle->ssl);
-        handle->ssl = NULL;
-    }
-}
 
 /**
  Wraps a file descriptor into an ssl socket
-
+ 
  @param handle Communication handle for the socket
  */
 void wrapClient(COMM* handle){
