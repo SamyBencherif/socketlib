@@ -189,12 +189,14 @@ int close_socket(COMM* handle){
 // Simple wrapper to send buffer
 ssize_t send_buff(COMM* handle, const char* data, size_t length)
 {
-    
     if(!sock_state_valid(handle)){
         return -1;
     }
     int n = 1;
+    #ifdef __linux
+    #else
     setsockopt(handle->fd, SOL_SOCKET, SO_NOSIGPIPE, &n, sizeof(n));
+    #endif
     fd_set wfds;
     FD_ZERO(&wfds);
     FD_SET(handle->fd,&wfds);
@@ -262,7 +264,11 @@ ssize_t send_msg(COMM* handle,const char* data,size_t length){
     if(bytes){
         if( send_buff(handle, bytes, 4) > 0){
             free(bytes);
-            return send_buff(handle, data, strlen(data));
+            if(data){
+                return send_buff(handle, data, strlen(data));
+            }else{
+                return 4;
+            }
         }else{
             free(bytes);
             return 0;
