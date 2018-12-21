@@ -2,6 +2,8 @@ linux:
 	@gcc -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o -lssl
 	@gcc -shared -fPIC -Wl,-soname,libsock.so -o ./dynamiclibs/libsock.so ./objectfiles/socklib.o -lc -lssl
 	@echo Made libsock.so
+	@ar rcs ./staticlibs/libsocklib.a ./objectfiles/socklib.o
+	@echo Made libsocklib.a Static Library
 mac:
 	@rm -rf *.dylib
 	@gcc -std=c11 -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o  -I/usr/local/Cellar/openssl/1.0.2q/include 

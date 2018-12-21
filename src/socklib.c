@@ -164,9 +164,11 @@ int close_socket(COMM* handle){
     if(handle->fd == -1){
         return -1;
     }
-    int shut = 0;
+    // set default return in case ssl is disabled
+    int shut = 0x1;
     if(handle->ssl){
-        shut &= SSL_shutdown(handle->ssl);
+        shut = 0;// reset the default value in case ssl is enabled.
+        shut |= SSL_shutdown(handle->ssl);
         SSL_free(handle->ssl);
         handle->ssl = NULL;
     }
@@ -176,7 +178,7 @@ int close_socket(COMM* handle){
         if(errno == 0){
             printf("Shutdown successful! Attempting to close!\n");
             shut = shut<<1;
-            shut &= close(handle->fd);
+            shut |= close(handle->fd);
         }
     }else{
         printf("Error %d\n",errno);
