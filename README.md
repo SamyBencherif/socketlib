@@ -16,6 +16,7 @@ Currently under construction. Some io functions are not completely usable. Users
 // communication handle for many functions.
 
 #include "socklib.h"
+#include <signal.h>
 #include <stdio.h>
 int main(){
   signal(SIGPIPE, SIG_IGN); // In case the server disconnects we dont want to fault on a broken pipe.
@@ -43,6 +44,7 @@ int main(){
 //This is an example of a hello world server in C. A class wrapper can be written in C++ to avoid passing the struct and its
 // communication handle for many functions.
 #include "socklib.h"
+#include <signal.h>
 #include <stdio.h>
 int main(){
   signal(SIGPIPE, SIG_IGN); // In case the client disconnects we dont want to fault on a broken pipe.
