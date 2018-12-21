@@ -8,8 +8,7 @@ Dynamic libraries are compiled and linked programs that are loaded into memory (
 ## When should I use the Static Library
 Static libraries (often .a files) are compiled and linked code that contain the functions and resources required by your main program. Often times the header file for the library may need the "extern" tag to preface functions that are in the library to indicate these resources are not located in your main program. Static libraries are used in C-interoperable languages (C, C++, Objective-C, Swift,...) and are embeded into your main program at compile time (usually using -l<frameworkname> in gcc). Common uses are compiling these sources into the main program to reduce runtime complexity (dll loading isnt super fast sometimes) and minimizing code (no calls to dlopen or retrieving function pointers).
 
-## Python wrapper example
-Currently under construction. Some io functions are not completely usable. Users may want to write their own wrapper using the ctypes library in python.
+## C example
 ```c
 //Static library examples
 // This is an example of a hello world client in C. A class wrapper can be written in C++ to avoid passing the struct and its
