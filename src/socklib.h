@@ -94,6 +94,8 @@ extern void initOpenSSL(void);
 
 FILE* libOutput();
 
+void socklib_init();
+
 extern bool LoadCertificates(char* CertFile, char* KeyFile);
 int* read_select(int*sock_fds, unsigned long length, int timeout);
 

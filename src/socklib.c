@@ -33,17 +33,32 @@
 
 #include "socklib.h"
 #include "sslfunctions.h"
-
-// Specify minframe
+#include <stdarg.h>
+// Specify minframe, usuaally sie of an integer since SSL sends int sizes of files rather than long sizes
 ssize_t MIN_FRAME = 4;
 // Read descriptor vector
 
-FILE* output = tmpfile();
+FILE* output;
+void socklib_init()
+{
+    output = tmpfile();
+
+}
 FILE* libOutput()
 {
     return output;
 }
-
+void output_write(const char* str,...)
+{
+    va_list args;
+    va_start(args,str);
+    // add 50 extra bytes to allow space for numbers or other format values
+    char* buffer = (char*)malloc(strlen(str)+50);
+    if(sprintf(buffer,str,args) > 0){
+        fputs(buffer,output);
+    }
+    free(buffer);
+}
 
 
 
@@ -150,7 +165,7 @@ int client_connect(struct client_sock* client, const char* host, int port){
     if(inet_pton(client->prot, host, &serv_addr.sin_addr)<=0)
     {
         //printf("\nInvalid address/ Address not supported \n");
-        fputs("Invalid address/ Address not supported \n",output);
+        output_write("Invalid address/ Address not supported \n");
         return -1;
     }
     bool connected = connect(client->handle.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0;
@@ -161,7 +176,7 @@ int client_connect(struct client_sock* client, const char* host, int port){
         }
     }else{
         //printf("Failed to connect.\n");
-        fputs("Failed to connect.\n",output);
+        output_write("Failed to connect.\n");
         return -1;
     }
     return 1;
@@ -181,20 +196,19 @@ int close_socket(COMM* handle){
     }
     errno = 0;
     //printf("Attempting to shutdown %d\n",handle->fd);
-    fputs("Attempting to shutdown "+itoa(handle->fd)+"\n");
+    output_write("Attempting to shutdown %d\n",handle->fd);
     if(shutdown(handle->fd,SHUT_RDWR) == 0){
         if(errno == 0){
             //printf("Shutdown successful! Attempting to close!\n");
-            fputs("Shutdown successful! Attempting to close!\n",output);
+            output_write("Shutdown successful! Attempting to close!\n");
             shut = shut<<1;
             shut |= close(handle->fd);
             if(shut == 2){
-                fputs("Closed!\n",output);
+                output_write("Closed!\n");
             }
         }
     }else{
-        //printf("Error %d\n",errno);
-        fputs("Error "+itoa(errno)+"\n", output);
+        output_write("Error %d\n",errno);
     }
     return (shut == 2) ? 0 : -1;
 }
@@ -223,7 +237,7 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
     int ready = select(handle->fd +1,NULL,&wfds,NULL,&tv);
     if(ready < 1 || !FD_ISSET(handle->fd,&wfds)){
         //printf("Fd not able to be written to!\n");
-        fputs("Fd not able to be written to!\n",output);
+        output_write("Fd not able to be written to!\n");
         return -1;
     }
     if(errno == 0){
@@ -235,7 +249,8 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
     }
     else{
         //printf("Error in send_buff %d\n",errno);
-        fputs("Error in send_buff"+itoa(errno)+"\n",output);
+        //fputs("Error in send_buff"+itoa(errno)+"\n",output);
+        output_write("Error in send_buff %d\n",errno);
     }
     return sent;
 }
@@ -253,7 +268,8 @@ ssize_t receive(COMM* handle, char* buff, size_t count)
     }
     if(errno != 0){
         //printf("Error in recv %d\n",errno);
-        fputs("Error in recv"+itoa(errno)+"\n",output);
+        //fputs("Error in recv"+itoa(errno)+"\n",output);
+        output_write("Error in recv %d\n",errno);
     }
     return reecved;
 }
@@ -388,7 +404,8 @@ struct client_sock client_socket(int prot,int type, bool ssl)
     int fd = create_socket(prot,type);
     if(fd > 0){
         //printf("Received file descriptor %d from sys.\n",fd);
-        fputs("Received file descriptor "+itoa(fd)+" from sys.\n", output);
+        //fputs("Received file descriptor "+itoa(fd)+" from sys.\n", output);
+        output_write("Received file descriptor %d from sys.\n",fd);
         client.handle.fd = fd;
         client.handle.ssl = NULL;
         client.prot = prot;
