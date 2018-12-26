@@ -92,6 +92,8 @@ struct server_sock{
 };
 extern void initOpenSSL(void);
 
+FILE* libOutput();
+
 extern bool LoadCertificates(char* CertFile, char* KeyFile);
 int* read_select(int*sock_fds, unsigned long length, int timeout);
 

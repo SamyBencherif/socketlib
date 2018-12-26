@@ -1,4 +1,6 @@
 #include "socklib.h"
+#include <signal.h>
+
 #include <stdio.h>
 int main(){
     signal(SIGPIPE, SIG_IGN);
@@ -11,24 +13,19 @@ int main(){
     if(server.start(&server,5,1337) == 1){
         printf("Started\n");
         struct client_sock client = server.accept(server);
-        while(true){
-            if(!msg){
-                printf("Receiving!\n");
-                msg = client.recv_msg(&client.handle);
-            }
-            printf("Writing!\n");
-            if(msg){
-                ssize_t sent = client.send_msg(&client.handle,msg,strlen(msg));
-                if(sent <= 0){
-                    printf("breaking free\n");
-                    break;
-                }
-            }
-            usleep(1000000);
+        client.settimeout(client.handle.fd,3);
+        if(!msg){
+            printf("Receiving!\n");
+            msg = client.recv_msg(&client.handle);
+            printf("%s\n",msg);
+            free((void*)msg);
         }
+        client.close(&client.handle);
+        server.close(&server.handle);
     }else{
         printf("Failed to start\n");
     }
     printf("Closing!\n");
+    
     return 0;
 }

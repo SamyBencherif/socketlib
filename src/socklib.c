@@ -38,6 +38,11 @@
 ssize_t MIN_FRAME = 4;
 // Read descriptor vector
 
+FILE* output = tmpfile();
+FILE* libOutput()
+{
+    return output;
+}
 
 
 
@@ -144,7 +149,8 @@ int client_connect(struct client_sock* client, const char* host, int port){
     // Convert IPv4 and IPv6 addresses from text to binary form
     if(inet_pton(client->prot, host, &serv_addr.sin_addr)<=0)
     {
-        printf("\nInvalid address/ Address not supported \n");
+        //printf("\nInvalid address/ Address not supported \n");
+        fputs("Invalid address/ Address not supported \n",output);
         return -1;
     }
     bool connected = connect(client->handle.fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == 0;
@@ -154,7 +160,8 @@ int client_connect(struct client_sock* client, const char* host, int port){
             wrapClient(&client->handle);
         }
     }else{
-        printf("Failed to connect.\n");
+        //printf("Failed to connect.\n");
+        fputs("Failed to connect.\n",output);
         return -1;
     }
     return 1;
@@ -173,15 +180,21 @@ int close_socket(COMM* handle){
         handle->ssl = NULL;
     }
     errno = 0;
-    printf("Attempting to shutdown %d\n",handle->fd);
+    //printf("Attempting to shutdown %d\n",handle->fd);
+    fputs("Attempting to shutdown "+itoa(handle->fd)+"\n");
     if(shutdown(handle->fd,SHUT_RDWR) == 0){
         if(errno == 0){
-            printf("Shutdown successful! Attempting to close!\n");
+            //printf("Shutdown successful! Attempting to close!\n");
+            fputs("Shutdown successful! Attempting to close!\n",output);
             shut = shut<<1;
             shut |= close(handle->fd);
+            if(shut == 2){
+                fputs("Closed!\n",output);
+            }
         }
     }else{
-        printf("Error %d\n",errno);
+        //printf("Error %d\n",errno);
+        fputs("Error "+itoa(errno)+"\n", output);
     }
     return (shut == 2) ? 0 : -1;
 }
@@ -209,7 +222,8 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
     ssize_t sent = 0;
     int ready = select(handle->fd +1,NULL,&wfds,NULL,&tv);
     if(ready < 1 || !FD_ISSET(handle->fd,&wfds)){
-        printf("Fd not able to be written to!\n");
+        //printf("Fd not able to be written to!\n");
+        fputs("Fd not able to be written to!\n",output);
         return -1;
     }
     if(errno == 0){
@@ -220,7 +234,8 @@ ssize_t send_buff(COMM* handle, const char* data, size_t length)
         }
     }
     else{
-        printf("Error in send_buff %d\n",errno);
+        //printf("Error in send_buff %d\n",errno);
+        fputs("Error in send_buff"+itoa(errno)+"\n",output);
     }
     return sent;
 }
@@ -237,7 +252,8 @@ ssize_t receive(COMM* handle, char* buff, size_t count)
        reecved = recv(handle->fd,buff,count,0);
     }
     if(errno != 0){
-        printf("Error in recv %d\n",errno);
+        //printf("Error in recv %d\n",errno);
+        fputs("Error in recv"+itoa(errno)+"\n",output);
     }
     return reecved;
 }
@@ -371,7 +387,8 @@ struct client_sock client_socket(int prot,int type, bool ssl)
     client.ssl = ssl;
     int fd = create_socket(prot,type);
     if(fd > 0){
-        printf("Received file descriptor %d from sys.\n",fd);
+        //printf("Received file descriptor %d from sys.\n",fd);
+        fputs("Received file descriptor "+itoa(fd)+" from sys.\n", output);
         client.handle.fd = fd;
         client.handle.ssl = NULL;
         client.prot = prot;
