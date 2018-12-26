@@ -38,15 +38,11 @@
 ssize_t MIN_FRAME = 4;
 // Read descriptor vector
 
-FILE* output = NULL;
-void socklib_init()
+COMM output = {0,NULL};
+// Returns output stream for the library.
+int libOutput()
 {
-    output = tmpfile();
-
-}
-FILE* libOutput()
-{
-    return output;
+    return output.fd;
 }
 void output_write(const char* str,...)
 {
@@ -54,21 +50,17 @@ void output_write(const char* str,...)
     va_start(args,str);
     // add 50 extra bytes to allow space for numbers or other format values
     char* buffer = (char*)malloc(strlen(str)+50);
-    if(sprintf(buffer,str,args) > 0 && output){
-        fputs(buffer,output);
+    if(sprintf(buffer,str,args) > 0 && output.fd > -1){
+        send(output.fd,buffer,strlen(buffer),0);
     }
     free(buffer);
 }
-
-
 
 // Creates a general purpose socket, this method is not disclosed to the header file.
 // Users should call the appropriate methods generating either a server_sock or client_sock struct
 int create_socket(int prot,int type)
 {
-    int protocol = (prot == AF_INET) ? AF_INET : AF_INET6;
-    int typespec = (type == SOCK_STREAM) ? SOCK_STREAM : SOCK_DGRAM;
-    return socket(protocol,typespec,0);
+    return socket(prot,type,0);
 }
 
 /* Sets options for a file descriptor. Flag indicates the type and option for arg:
@@ -212,6 +204,21 @@ int close_socket(COMM* handle){
     }
     return (shut == 2) ? 0 : -1;
 }
+// Initializes the library and open ssl if the library was compiled with ssl
+void socklib_init()
+{
+    output.fd = socket(AF_UNIX,SOCK_STREAM,0);
+    #ifdef ssl_on
+    initOpenSSL();
+    #endif
+}
+// Closes the log output socket stream and shutsdown any oppened ssl configurations.
+void socklib_deinit()
+{
+    close_socket(&output);
+    shutdownSSL();
+}
+
 // Start io functions
 
 

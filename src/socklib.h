@@ -90,13 +90,12 @@ struct server_sock{
     int (*start)(struct server_sock* server, int backlog, int port);
     int (*close)(COMM* handle);
 };
-extern void initOpenSSL(void);
-
-FILE* libOutput();
+int libOutput();
 
 void socklib_init();
 
 extern bool LoadCertificates(char* CertFile, char* KeyFile);
+
 int* read_select(int*sock_fds, unsigned long length, int timeout);
 
 struct server_sock server_socket(int prot,int type,bool ssl);
