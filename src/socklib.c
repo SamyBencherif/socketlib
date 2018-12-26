@@ -46,13 +46,17 @@ int libOutput()
 }
 void output_write(const char* str,...)
 {
+    if(output.fd < 0){
+        return;
+    }
     va_list args;
     va_start(args,str);
     // add 50 extra bytes to allow space for numbers or other format values
     char* buffer = (char*)malloc(strlen(str)+50);
-    if(sprintf(buffer,str,args) > 0 && output.fd > -1){
+    if(sprintf(buffer,str,args) > 0){
         send(output.fd,buffer,strlen(buffer),0);
     }
+    va_end(args);
     free(buffer);
 }
 
