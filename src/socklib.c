@@ -38,7 +38,7 @@
 ssize_t MIN_FRAME = 4;
 // Read descriptor vector
 
-FILE* output;
+FILE* output = NULL;
 void socklib_init()
 {
     output = tmpfile();
@@ -54,7 +54,7 @@ void output_write(const char* str,...)
     va_start(args,str);
     // add 50 extra bytes to allow space for numbers or other format values
     char* buffer = (char*)malloc(strlen(str)+50);
-    if(sprintf(buffer,str,args) > 0){
+    if(sprintf(buffer,str,args) > 0 && output){
         fputs(buffer,output);
     }
     free(buffer);
