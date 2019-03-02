@@ -4,6 +4,8 @@ linux:
 	@echo Made libsock.so
 	@ar rcs ./staticlibs/libsocklib.a ./objectfiles/socklib.o
 	@echo Made libsocklib.a Static Library
+	@cp ./src/socklib.h ./staticlibs/socklib.h
+	@cp ./src/socklib.h ./dynamiclibs/socklib.h
 mac:
 	@rm -rf *.dylib
 	@gcc -std=c11 -fPIC -c ./src/socklib.c -o ./objectfiles/socklib.o  -I/usr/local/Cellar/openssl/1.0.2q/include 

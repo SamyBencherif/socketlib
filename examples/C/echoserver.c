@@ -1,31 +1,51 @@
 #include "socklib.h"
-#include <signal.h>
-
+#include "wavfile.h"
 #include <stdio.h>
+FILE* fp;
+unsigned char header[88] = {
+	0x52, 0x49, 0x46, 0x46, 0x50, 0xFC, 0x68, 0x00, 0x57, 0x41, 0x56, 0x45,
+	0x66, 0x6D, 0x74, 0x20, 0x10, 0x00, 0x00, 0x00, 0x03, 0x00, 0x02, 0x00,
+	0x44, 0xAC, 0x00, 0x00, 0x20, 0x62, 0x05, 0x00, 0x08, 0x00, 0x20, 0x00,
+	0x66, 0x61, 0x63, 0x74, 0x04, 0x00, 0x00, 0x00, 0x80, 0x1F, 0x0D, 0x00,
+	0x50, 0x45, 0x41, 0x4B, 0x18, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00,
+	0x06, 0x28, 0x7A, 0x5C, 0x00, 0x88, 0x48, 0x3E, 0xBD, 0xCF, 0x00, 0x00,
+	0x00, 0xC0, 0x47, 0x3E, 0xBD, 0xCF, 0x00, 0x00, 0x64, 0x61, 0x74, 0x61,
+	0x00, 0xFC, 0x68};
+
+void readClient(CLIENT* client){
+     fp = fopen("./file.wav","wb");
+     fwrite(header,1,88,fp);
+    printf("reading %d \n",client->handle.fd);
+    char* buff = (char*)malloc(1024*sizeof(char));
+    if(!buff){
+        printf("error occurred creating buffer!\n");
+        return;
+    }
+    memset(buff,0,1024);
+    while(recv(client->handle.fd,buff,1024,MSG_WAITALL) > 0){
+        fwrite(buff,1,1024,fp);
+    }
+    free(buff);
+    fclose(fp);
+    printf("done reading \n");
+}
 int main(){
-    signal(SIGPIPE, SIG_IGN);
+    socklib_init();
     printf("Getting server socket\n");
-    struct server_sock server = server_socket(2,1,true);
-    initOpenSSL();
-    bool loaded = LoadCertificates("certificate.pem", "key.pem");
+    SERVER server = server_socket(2,1,false);
+    // if(!LoadCertificates("certificate.pem", "key.pem"))
+    // {
+    //     return -1;
+    // }
     printf("Starting server socket\n");
     const char* msg = NULL;
     if(server.start(&server,5,1337) == 1){
-        printf("Started\n");
-        struct client_sock client = server.accept(server);
-        client.settimeout(client.handle.fd,3);
-        if(!msg){
-            printf("Receiving!\n");
-            msg = client.recv_msg(&client.handle);
-            printf("%s\n",msg);
-            free((void*)msg);
-        }
-        client.close(&client.handle);
-        server.close(&server.handle);
+       CLIENT c = server.accept(server);
+        readClient(&c);
     }else{
         printf("Failed to start\n");
     }
-    printf("Closing!\n");
-    
+    printf("closing\n");
+    socklib_deinit();
     return 0;
 }
