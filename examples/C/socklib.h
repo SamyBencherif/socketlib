@@ -30,13 +30,19 @@
  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  Contributors: Andrew Strickland, JK2Designs
  */
+#ifdef WIN32
+#include <WinSock2.h>
+
+#else
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/select.h>
 #include <sys/time.h>
+
+#endif
+
 #include <stdbool.h>
 #include <stdlib.h>
-
 #include <string.h>
 #include <unistd.h>
 #include <netinet/in.h>
@@ -49,7 +55,7 @@
 #define false 0
 #define TIMEOUT 2
 #define REUSE 1
-
+#define MIN_FRAME 4
 //Forward declarations of SSL and the generic socket type.
 
 typedef struct ssl_st SSL;
@@ -90,8 +96,16 @@ struct server_sock{
     int (*start)(struct server_sock* server, int backlog, int port);
     int (*close)(COMM* handle);
 };
-extern void initOpenSSL(void);
+typedef struct server_sock SERVER;
+typedef struct client_sock CLIENT;
+int libOutput();
+
+void socklib_init();
+
+void socklib_deinit();
+
 extern bool LoadCertificates(char* CertFile, char* KeyFile);
+
 int* read_select(int*sock_fds, unsigned long length, int timeout);
 
 struct server_sock server_socket(int prot,int type,bool ssl);
